@@ -64,12 +64,12 @@ class MyNode(Node):
         # Load parameters
         self.declare_parameter("num_nodes", 1)
         self.declare_parameter("comm_radius", 2.0)
-        self.declare_parameter('epsilon_bar', 0.8)  # Consensus step size for the average graph.
+        self.declare_parameter('epsilon_bar', 0.25) # Consensus step size for the average graph.
         self.declare_parameter('epsilon0', 0.4)     # Initial consensus step size for B2. (7, 20)
         self.declare_parameter('alpha0', 1.5)       # Initial step size for y. (11)
-        self.declare_parameter('gamma', 0.5)       # Decay rate for epsilon. (16)
-        self.declare_parameter('beta', 0.5)        # Decay rate for alpha. (16)
-        self.declare_parameter('num_consensus_steps', 25)
+        self.declare_parameter('gamma', 0.51)       # Decay rate for epsilon. (16)
+        self.declare_parameter('beta', 0.51)        # Decay rate for alpha. (16)
+        self.declare_parameter('num_consensus_steps', 50)
         self.declare_parameter('num_pi_steps', 10)
 
         self.num_nodes = self.get_parameter("num_nodes").get_parameter_value().integer_value
@@ -81,6 +81,8 @@ class MyNode(Node):
         self.beta = self.get_parameter('beta').get_parameter_value().double_value
         self.num_consensus_steps = self.get_parameter('num_consensus_steps').get_parameter_value().integer_value
         self.num_pi_steps = self.get_parameter('num_pi_steps').get_parameter_value().integer_value
+
+        self.get_initial_features()
 
         # Define callback groups. Using callback groups ensures the proper use of resources thanks to multi-threading.
         # All callbacks assigned to a MutuallyExclusiveCallbackGroup will be executed in the same thread, but in
@@ -156,7 +158,7 @@ class MyNode(Node):
         return ready
 
     def get_initial_features(self):
-        rng = np.random.default_rng()
+        rng = np.random.default_rng(42 + self.node_id)  # Seed for reproducibility
         self.x_i = rng.standard_normal((1,))
         self.y = rng.random((1,))
         self.z = rng.random((1,))
@@ -179,7 +181,7 @@ class MyNode(Node):
 
             # Update the node's representation using the GNN layer.
             neighbor_values = list(self.received_msg[consensus_id][step].values())
-            local_value = (local_value + sum(neighbor_values)) / (1 + len(neighbor_values))
+            local_value = local_value + self.epsilon_bar * sum(n_val - local_value for n_val in neighbor_values)
 
             self.get_logger().debug(f"Updated step {step}.")
 
@@ -223,7 +225,8 @@ class MyNode(Node):
         self.round_counter += 1
         self.get_logger().info(f"Round {self.round_counter} started.")
 
-        self.get_initial_features()
+
+        self.get_logger().info(f"Initial features: x_i = {self.x_i[0]:.4f}, y = {self.y[0]:.4f}, z = {self.z[0]:.4f}")
 
         # Main stochastic PI logic.
         for k in range(self.num_pi_steps):
@@ -231,14 +234,13 @@ class MyNode(Node):
 
             # --- Step 1: Consensus for m[k] ---
             m_k = self.run_consensus(self.x_i, f"{k}_m")
-            self.get_logger().info(f"Consensus m[{k}] = {m_k[0]:.4f}")
+            self.get_logger().info(f"m[{k}] = {m_k[0]:.4f}")
 
             # --- Step 2: Fetch neighbor x_j and compute b vectors ---
-            last_step = max(self.received_msg[f"{k}_m"].keys())
-            sum_term = sum(xj - self.x_i for xj in self.received_msg[f"{k}_m"][last_step].values())
+            sum_term = sum(xj - self.x_i for xj in self.received_msg[f"{k}_m"][0].values())
             b_i = self.x_i + self.epsilon_bar * sum_term - m_k
             b2_i = self.x_i + epsilon_k * sum_term - m_k
-            self.get_logger().info(f"Computed b_i = {b_i[0]:.4f}, b2_i = {b2_i[0]:.4f}")
+            self.get_logger().info(f"b_i = {b_i[0]:.4f}, b2_i = {b2_i[0]:.4f}")
             del self.received_msg[f"{k}_m"]  # Clear memory
 
             # --- Step 3: Consensus for Rayleigh Ratio and Norm ---
@@ -248,7 +250,7 @@ class MyNode(Node):
 
             y0_k = sum_ray_num / sum_ray_den if sum_ray_den > 1e-9 else np.array([0])
             norm_b2_k = np.sqrt(sum_norm_sq)
-            self.get_logger().info(f"Consensus Rayleigh Ratio = {y0_k[0]:.4f}, Norm = {norm_b2_k[0]:.4f}")
+            self.get_logger().info(f"y0[{k}] = {y0_k[0]:.4f}, ||b2[{k}]|| = {norm_b2_k[0]:.4f}")
             del self.received_msg[f"{k}_ray"]  # Clear memory
 
             # --- Steps 4, 5, 6: Local State Updates ---
@@ -259,6 +261,7 @@ class MyNode(Node):
 
             lambda2 = self.z[0]
             self.lambda_pub.publish(Float32(data=lambda2))
+            self.get_logger().info(f"y = {self.y[0]:.4f}, z = {self.z[0]:.4f}, x_i = {self.x_i[0]:.4f}\n")
 
             # Update LED color based on the estimated value.
             led_color = LEDMatrix.from_colormap(LEDMatrix.interp(lambda2, 0.0, self.num_nodes, 0.0, 1.0), color_space='hsv', cmap_name="jet")

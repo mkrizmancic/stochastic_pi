@@ -1,23 +1,24 @@
 import json
-import pathlib
 import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
 import copy
+
 
 class Node:
     """
     Represents a single node in the network, holding its state and performing local computations.
     """
     def __init__(self, node_id, num_nodes, epsilon_bar):
+        rng = np.random.default_rng(42 + node_id)  # Seeded RNG for reproducibility
         # --- Persistent State Variables ---
         self.id = node_id
         # Estimate of the i-th component of the Fiedler vector
-        self.x_i = np.random.randn()
+        self.x_i = rng.standard_normal()
         # Smoothed estimate of the second largest eigenvalue of W_bar
-        self.y = np.random.rand()
+        self.y = rng.random()
         # Estimate of algebraic connectivity (lambda_2)
-        self.z = np.random.rand()
+        self.z = rng.random()
 
         # --- System Parameters ---
         self.N = num_nodes
@@ -94,7 +95,7 @@ class Network:
                 G_k.add_edge(u, v)
         return G_k
 
-    def _run_consensus(self, initial_values, graph, num_steps):
+    def _run_consensus(self, initial_values, graph, num_steps, epsilon=0.1):
         """
         Simulates a simple average consensus protocol for a fixed number of steps.
         Each node repeatedly averages its value with its neighbors.
@@ -105,10 +106,10 @@ class Network:
             for i in range(self.N):
                 neighbor_vals = [node_values[j] for j in graph.neighbors(i)]
                 # Average with self and neighbors
-                new_values[i] = (node_values[i] + sum(neighbor_vals)) / (1 + len(neighbor_vals))
+                new_values[i] = node_values[i] + epsilon * sum(n_val - node_values[i] for n_val in neighbor_vals)
             node_values = new_values
         # After enough iterations, all values are close to the true average
-        return np.mean(list(node_values.values()))
+        return node_values
 
     def run_simulation(self, num_iterations, num_consensus_steps):
         """
@@ -116,46 +117,60 @@ class Network:
         """
         history = []
 
+        for node in self.nodes.values():
+            print(f"Node {node.id}: Initial x_i = {node.x_i:.4f}, y = {node.y:.4f}, z = {node.z:.4f}")
+        print("Average: ", np.mean([node.x_i for node in self.nodes.values()]))
+        print()
+
         for k in range(num_iterations):
-            # --- Get diminishing step sizes for iteration k ---
+            # --- Get diminishing step sizes for iteration k --- CHECKED
             alpha_k = self.params['alpha0'] / ((k + 1) ** self.params['beta'])
             epsilon_k = self.params['epsilon0'] / ((k + 1) ** self.params['gamma'])
 
-            # --- Get the random graph instance for this iteration ---
-            G_k = self._create_random_graph_instance()
+            # --- Get the random graph instance for this iteration --- CHECKED
+            # G_k = self._create_random_graph_instance()
+            G_k = self.ideal_graph  # Using the ideal graph for simplicity in this implementation
 
-            # --- Get current Fiedler vector estimates from all nodes ---
+            # --- Get current Fiedler vector estimates from all nodes --- CHECKED
             current_x = {i: node.x_i for i, node in self.nodes.items()}
 
-            # --- Step 1: Run consensus to get m[k] = mean(x[k]) ---
-            m_k = self._run_consensus(current_x, G_k, num_consensus_steps)
+            # --- Step 1: Run consensus to get m[k] = mean(x[k]) --- CHECKED
+            m_k = self._run_consensus(current_x, G_k, num_consensus_steps, self.params['epsilon_bar'])
+            print(f"m[{k}] = {m_k}")
 
-            # --- Step 2: Each node computes its b_i and b2_i vectors locally ---
+            # --- Step 2: Each node computes its b_i and b2_i vectors locally --- CHECKED
             for i, node in self.nodes.items():
-                node.compute_b_vectors(m_k, epsilon_k, current_x, G_k)
+                node.compute_b_vectors(m_k[i], epsilon_k, current_x, G_k)
+                print(f"Node {i}: b_i = {node.b_i:.4f}, b2_i = {node.b2_i:.4f}")
 
-            # --- Step 3: Run consensus for Rayleigh Ratio and Norm ---
+            # --- Step 3: Run consensus for Rayleigh Ratio and Norm --- CHECKED
             # Initial values for the two parallel consensus rounds
             rayleigh_num_vals = {i: node.x_i * node.b_i for i, node in self.nodes.items()}
             rayleigh_den_vals = {i: node.x_i**2 for i, node in self.nodes.items()}
             norm_sq_vals = {i: node.b2_i**2 for i, node in self.nodes.items()}
 
-            # The paper combines these, but simulating them separately is clearer
-            sum_rayleigh_num = self._run_consensus(rayleigh_num_vals, G_k, num_consensus_steps) * self.N
-            sum_rayleigh_den = self._run_consensus(rayleigh_den_vals, G_k, num_consensus_steps) * self.N
-            sum_norm_sq = self._run_consensus(norm_sq_vals, G_k, num_consensus_steps) * self.N
+            # The paper combines these, but simulating them separately is clearer --- CHECKED
+            sum_rayleigh_num = self._run_consensus(rayleigh_num_vals, G_k, num_consensus_steps, self.params['epsilon_bar'])
+            sum_rayleigh_den = self._run_consensus(rayleigh_den_vals, G_k, num_consensus_steps, self.params['epsilon_bar'])
+            sum_norm_sq = self._run_consensus(norm_sq_vals, G_k, num_consensus_steps, self.params['epsilon_bar'])
 
-            # Calculate y0[k] and ||b2[k]||
-            y0_k = sum_rayleigh_num / sum_rayleigh_den if sum_rayleigh_den > 1e-9 else 0
-            norm_b2_k = np.sqrt(sum_norm_sq)
+            # Calculate y0[k] and ||b2[k]|| --- CHECKED
+            y0_k = dict()
+            norm_b2_k = dict()
+            for i in self.nodes.keys():
+                y0_k[i] = sum_rayleigh_num[i] / sum_rayleigh_den[i] if sum_rayleigh_den[i] > 1e-9 else 0
+                norm_b2_k[i] = np.sqrt(sum_norm_sq[i] * self.N)
+                print(f"y0 = {y0_k[i]:.4f}, ||b2]|| = {norm_b2_k[i]:.4f}")
 
-            # --- Steps 4, 5, 6: Nodes update their estimates locally ---
+            # --- Steps 4, 5, 6: Nodes update their estimates locally --- CHECKED
             for i, node in self.nodes.items():
-                node.update_eigenvalue_estimate(y0_k, alpha_k)
-                node.update_eigenvector_estimate(norm_b2_k)
+                node.update_eigenvalue_estimate(y0_k[i], alpha_k)
+                node.update_eigenvector_estimate(norm_b2_k[i])
+                print(f"Node {i}: y = {node.y:.4f}, z = {node.z:.4f}, x_i = {node.x_i:.4f}")
+            print()
 
             # Store the estimate from one node (they should all be the same)
-            history.append(self.nodes[0].z)
+            history.append([self.nodes[i].z for i in range(self.N)])
 
         return history
 
@@ -192,12 +207,14 @@ if __name__ == '__main__':
     # --- Simulation Parameters ---
     PARAMS = {
         'num_nodes': 5,
-        'connection_prob': 1.0,   # p_c: probability a link is active at time k
+        'connection_prob': 1.0,     # p_c: probability a link is active at time k
         'num_iterations': 20,
-        'num_consensus_steps': 25, # Fixed number of steps for consensus rounds
-        'epsilon_bar': 0.8,       # Constant step-size for b_i vector
-        'alpha0': 1.5, 'beta': 0.5, # Diminishing step-size params for y[k] update
-        'epsilon0': 0.4, 'gamma': 0.5 # Diminishing step-size params for b_{2,i} vector
+        'num_consensus_steps': 50,  # Fixed number of steps for consensus rounds
+        'epsilon_bar': 0.25,        # Constant step-size for b_i vector, eps < 2/lambda_N <= 1/d_max <= 1/(N-1)
+        'alpha0': 1.5,              # Diminishing step-size params for y[k] update
+        'beta': 0.51,               # 0.5 < beta <= 1
+        'epsilon0': 0.4,            # Diminishing step-size params for b_{2,i} vector
+        'gamma': 0.51               # 0.5 < gamma <= 1
     }
 
     # --- Setup ---
@@ -206,7 +223,7 @@ if __name__ == '__main__':
     with open(config_path, 'r') as f:
         graph_data = json.load(f)
 
-    ideal_graph = load_graph(5, graph_data)  # Load the first graph as the ideal graph
+    ideal_graph = load_graph(0, graph_data)  # Load the first graph as the ideal graph
 
     network = Network(
         num_nodes=PARAMS['num_nodes'],
@@ -227,6 +244,7 @@ if __name__ == '__main__':
     plt.style.use('seaborn-v0_8-whitegrid')
     fig, ax = plt.subplots(figsize=(12, 7))
 
+    estimation_history = np.array(estimation_history)
     ax.plot(estimation_history, label='Distributed Estimate of $\lambda_2(\overline{L})$', linewidth=2)
     ax.axhline(
         y=network.theoretical_lambda2,
