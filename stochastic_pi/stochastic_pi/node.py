@@ -66,11 +66,11 @@ class MyNode(Node):
         self.declare_parameter("comm_radius", 2.0)
         self.declare_parameter('epsilon_bar', 0.25) # Consensus step size for the average graph.
         self.declare_parameter('epsilon0', 0.4)     # Initial consensus step size for B2. (7, 20)
-        self.declare_parameter('alpha0', 1.5)       # Initial step size for y. (11)
+        self.declare_parameter('alpha0', 2.5)       # Initial step size for y. (11)
         self.declare_parameter('gamma', 0.51)       # Decay rate for epsilon. (16)
         self.declare_parameter('beta', 0.51)        # Decay rate for alpha. (16)
         self.declare_parameter('num_consensus_steps', 50)
-        self.declare_parameter('num_pi_steps', 10)
+        self.declare_parameter('num_pi_steps', 7)
 
         self.num_nodes = self.get_parameter("num_nodes").get_parameter_value().integer_value
         self.communication_radius = self.get_parameter("comm_radius").get_parameter_value().double_value
@@ -225,6 +225,7 @@ class MyNode(Node):
         self.round_counter += 1
         self.get_logger().info(f"Round {self.round_counter} started.")
 
+        self.get_initial_features()
 
         self.get_logger().info(f"Initial features: x_i = {self.x_i[0]:.4f}, y = {self.y[0]:.4f}, z = {self.z[0]:.4f}")
 
@@ -233,7 +234,10 @@ class MyNode(Node):
             alpha_k, epsilon_k = self.get_step_sizes(k)
 
             # --- Step 1: Consensus for m[k] ---
-            m_k = self.run_consensus(self.x_i, f"{k}_m")
+            if k >= 0:
+                m_k = self.run_consensus(self.x_i, f"{k}_m")
+            else:
+                m_k = np.array([0])
             self.get_logger().info(f"m[{k}] = {m_k[0]:.4f}")
 
             # --- Step 2: Fetch neighbor x_j and compute b vectors ---

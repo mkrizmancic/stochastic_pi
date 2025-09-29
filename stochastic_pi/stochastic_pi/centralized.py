@@ -135,7 +135,10 @@ class Network:
             current_x = {i: node.x_i for i, node in self.nodes.items()}
 
             # --- Step 1: Run consensus to get m[k] = mean(x[k]) --- CHECKED
-            m_k = self._run_consensus(current_x, G_k, num_consensus_steps, self.params['epsilon_bar'])
+            if k >= 0:
+                m_k = self._run_consensus(current_x, G_k, num_consensus_steps, self.params['epsilon_bar'])
+            else:
+                m_k = {i: 0.0 for i in range(self.N)}
             print(f"m[{k}] = {m_k}")
 
             # --- Step 2: Each node computes its b_i and b2_i vectors locally --- CHECKED
@@ -211,7 +214,7 @@ if __name__ == '__main__':
         'num_iterations': 20,
         'num_consensus_steps': 50,  # Fixed number of steps for consensus rounds
         'epsilon_bar': 0.25,        # Constant step-size for b_i vector, eps < 2/lambda_N <= 1/d_max <= 1/(N-1)
-        'alpha0': 1.5,              # Diminishing step-size params for y[k] update
+        'alpha0': 2.5,              # Diminishing step-size params for y[k] update
         'beta': 0.51,               # 0.5 < beta <= 1
         'epsilon0': 0.4,            # Diminishing step-size params for b_{2,i} vector
         'gamma': 0.51               # 0.5 < gamma <= 1
@@ -223,7 +226,7 @@ if __name__ == '__main__':
     with open(config_path, 'r') as f:
         graph_data = json.load(f)
 
-    ideal_graph = load_graph(0, graph_data)  # Load the first graph as the ideal graph
+    ideal_graph = load_graph(3, graph_data)  # Load the first graph as the ideal graph
 
     network = Network(
         num_nodes=PARAMS['num_nodes'],
