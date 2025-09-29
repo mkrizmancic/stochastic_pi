@@ -78,3 +78,15 @@ windows:
           cd scripts
           python3 graph_server.py
         - ros2 launch foxglove_bridge foxglove_bridge_launch.xml
+  - bags:
+      layout: even-horizontal
+      panes:
+        - |
+          cd /root/ros2_ws/bags
+          history -s "ros2 bag record -e '(/.*\/lambda2|/lambda2_ref)' -o stochastic_pi"
+        - |
+          cd /root/ros2_ws/bags/
+          history -s "ros2 bag play sim_formation_slow"
+        - |
+          cd /root/ros2_ws/bags/
+          history -s "ros2 bag record -e '(/.*\/discovery|/lambda2_ref)' -o sim_formation_slow"
