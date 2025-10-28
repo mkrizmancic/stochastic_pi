@@ -52,24 +52,29 @@ windows:
       layout: even-horizontal
       synchronize: after
       panes:
-        - <%- if args[0] == "mixed" or args[0] == "remote" %>
-          ssh -o StrictHostKeyChecking=no -o ForwardAgent=yes -t pi@rpi0.local '/home/pi/ros2_dist_gnn/docker/start_docker.sh ros2_gnn_cont' &&
+        - |
+          <%- if args[0] == "mixed" or args[0] == "remote" %>
+          ssh -o StrictHostKeyChecking=no -o ForwardAgent=yes -t pi@rpi0.local '/home/pi/ros2_dist_gnn/docker/start_docker.sh ros2_gnn_cont'
           <%- end %>
           ros2 run stochastic_pi node --ros-args -r __ns:=/node_0 -p num_nodes:=5 --log-level <%= log_level %> --log-level rcl:=INFO
-        - <%- if args[0] == "remote" %>
-          ssh -o StrictHostKeyChecking=no -o ForwardAgent=yes -t pi@rpi1.local '/home/pi/ros2_dist_gnn/docker/start_docker.sh ros2_gnn_cont' &&
+        - |
+          <%- if args[0] == "remote" %>
+          ssh -o StrictHostKeyChecking=no -o ForwardAgent=yes -t pi@rpi1.local '/home/pi/ros2_dist_gnn/docker/start_docker.sh ros2_gnn_cont'
           <%- end %>
           ros2 run stochastic_pi node --ros-args -r __ns:=/node_1 -p num_nodes:=5 --log-level <%= log_level %> --log-level rcl:=INFO
-        - <%- if args[0] == "remote" %>
-          ssh -o StrictHostKeyChecking=no -o ForwardAgent=yes -t pi@rpi2.local '/home/pi/ros2_dist_gnn/docker/start_docker.sh ros2_gnn_cont' &&
+        - |
+          <%- if args[0] == "remote" %>
+          ssh -o StrictHostKeyChecking=no -o ForwardAgent=yes -t pi@rpi2.local '/home/pi/ros2_dist_gnn/docker/start_docker.sh ros2_gnn_cont'
           <%- end %>
           ros2 run stochastic_pi node --ros-args -r __ns:=/node_2 -p num_nodes:=5 --log-level <%= log_level %> --log-level rcl:=INFO
-        - <%- if args[0] == "remote" %>
-          ssh -o StrictHostKeyChecking=no -o ForwardAgent=yes -t pi@rpi3.local '/home/pi/ros2_dist_gnn/docker/start_docker.sh ros2_gnn_cont' &&
+        - |
+          <%- if args[0] == "remote" %>
+          ssh -o StrictHostKeyChecking=no -o ForwardAgent=yes -t pi@rpi3.local '/home/pi/ros2_dist_gnn/docker/start_docker.sh ros2_gnn_cont'
           <%- end %>
           ros2 run stochastic_pi node --ros-args -r __ns:=/node_3 -p num_nodes:=5 --log-level <%= log_level %> --log-level rcl:=INFO
-        - <%- if args[0] == "remote" %>
-          ssh -o StrictHostKeyChecking=no -o ForwardAgent=yes -t pi@rpi4.local '/home/pi/ros2_dist_gnn/docker/start_docker.sh ros2_gnn_cont' &&
+        - |
+          <%- if args[0] == "remote" %>
+          ssh -o StrictHostKeyChecking=no -o ForwardAgent=yes -t pi@rpi4.local '/home/pi/ros2_dist_gnn/docker/start_docker.sh ros2_gnn_cont'
           <%- end %>
           ros2 run stochastic_pi node --ros-args -r __ns:=/node_4 -p num_nodes:=5 --log-level <%= log_level %> --log-level rcl:=INFO
   - central:
